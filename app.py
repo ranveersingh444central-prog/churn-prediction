@@ -159,6 +159,15 @@ div.block-container {
     color: #4A4D4A;
 }
 
+/* Altair / Vega-Lite Chart Card Styling */
+[data-testid="stVegaLiteChart"], .stVegaLiteChart {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E2DA !important;
+    border-radius: 4px !important;
+    padding: 1.25rem 1.25rem 0.75rem 1.25rem !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+}
+
 /* Executive Metric KPI Cards (Metric Style) */
 .kpi-card {
     background: #FFFFFF;
@@ -771,94 +780,63 @@ with tab_indiv:
         st.markdown(textwrap.dedent(card_html), unsafe_allow_html=True)
 
         # Diagnostic Breakdown (Drivers, Anchors, and Tailored Retention Actions)
+        def render_diagnostic_card(title: str, badge_label: str, badge_color: str, badge_bg: str, items: List[str], bullet_class: str, bullet_char: str, empty_text: str) -> str:
+            if items:
+                rows = "".join([f'<div class="diagnostic-item"><span class="{bullet_class}">{bullet_char}</span><span>{it}</span></div>' for it in items])
+            else:
+                rows = f'<div style="font-size: 0.85rem; color: #777873; padding: 0.5rem 0;">{empty_text}</div>'
+
+            return f"""
+            <div class="surface-card" style="height: 100%;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #F0EEE6;">
+                    <div style="font-family: 'Newsreader', serif; font-size: 1.2rem; font-weight: 500; color: #292B2A;">
+                        {title}
+                    </div>
+                    <span style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: {badge_color}; background: {badge_bg}; padding: 0.2rem 0.5rem; border-radius: 2px;">
+                        {badge_label}
+                    </span>
+                </div>
+                {rows}
+            </div>
+            """
+
         col_diag1, col_diag2, col_diag3 = st.columns(3, gap="medium")
 
         with col_diag1:
-            st.markdown(textwrap.dedent("""
-            <div class="surface-card">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                    <div style="font-family: 'Newsreader', serif; font-size: 1.2rem; font-weight: 500; color: #292B2A;">
-                        Key Risk Drivers
-                    </div>
-                    <span style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: #C85A46; background: #F9ECE9; padding: 0.2rem 0.5rem; border-radius: 2px;">
-                        Friction
-                    </span>
-                </div>
-            """), unsafe_allow_html=True)
-
-            if res["risk_drivers"]:
-                for driver in res["risk_drivers"]:
-                    st.markdown(textwrap.dedent(f"""
-                    <div class="diagnostic-item">
-                        <span class="bullet-risk">▲</span>
-                        <span>{driver}</span>
-                    </div>
-                    """), unsafe_allow_html=True)
-            else:
-                st.markdown(textwrap.dedent("""
-                <div style="font-size: 0.85rem; color: #777873; padding: 0.5rem 0;">
-                    No major friction drivers identified. Account demonstrates balanced, low-risk operational patterns.
-                </div>
-                """), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(render_diagnostic_card(
+                title="Key Risk Drivers",
+                badge_label="Friction",
+                badge_color="#C85A46",
+                badge_bg="#F9ECE9",
+                items=res["risk_drivers"],
+                bullet_class="bullet-risk",
+                bullet_char="▲",
+                empty_text="No major friction drivers identified. Account demonstrates balanced, low-risk operational patterns."
+            ), unsafe_allow_html=True)
 
         with col_diag2:
-            st.markdown(textwrap.dedent("""
-            <div class="surface-card">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                    <div style="font-family: 'Newsreader', serif; font-size: 1.2rem; font-weight: 500; color: #292B2A;">
-                        Retention Anchors
-                    </div>
-                    <span style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: #4F7959; background: #EBF2ED; padding: 0.2rem 0.5rem; border-radius: 2px;">
-                        Protective
-                    </span>
-                </div>
-            """), unsafe_allow_html=True)
-
-            if res["retention_anchors"]:
-                for anchor in res["retention_anchors"]:
-                    st.markdown(textwrap.dedent(f"""
-                    <div class="diagnostic-item">
-                        <span class="bullet-anchor">●</span>
-                        <span>{anchor}</span>
-                    </div>
-                    """), unsafe_allow_html=True)
-            else:
-                st.markdown(textwrap.dedent("""
-                <div style="font-size: 0.85rem; color: #777873; padding: 0.5rem 0;">
-                    Limited retention anchors found. Account is sensitive to competitive displacement or pricing shifts.
-                </div>
-                """), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(render_diagnostic_card(
+                title="Retention Anchors",
+                badge_label="Protective",
+                badge_color="#4F7959",
+                badge_bg="#EBF2ED",
+                items=res["retention_anchors"],
+                bullet_class="bullet-anchor",
+                bullet_char="●",
+                empty_text="Limited retention anchors found. Account is sensitive to competitive displacement or pricing shifts."
+            ), unsafe_allow_html=True)
 
         with col_diag3:
-            st.markdown(textwrap.dedent("""
-            <div class="surface-card">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                    <div style="font-family: 'Newsreader', serif; font-size: 1.2rem; font-weight: 500; color: #292B2A;">
-                        Recommended Action Plan
-                    </div>
-                    <span style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: #547C78; background: #EBF2F1; padding: 0.2rem 0.5rem; border-radius: 2px;">
-                        Prescriptive
-                    </span>
-                </div>
-            """), unsafe_allow_html=True)
-
-            if res.get("retention_actions"):
-                for action in res["retention_actions"]:
-                    st.markdown(textwrap.dedent(f"""
-                    <div class="diagnostic-item">
-                        <span class="bullet-action">→</span>
-                        <span>{action}</span>
-                    </div>
-                    """), unsafe_allow_html=True)
-            else:
-                st.markdown(textwrap.dedent("""
-                <div style="font-size: 0.85rem; color: #777873; padding: 0.5rem 0;">
-                    Account status stable. Review periodic service satisfaction surveys.
-                </div>
-                """), unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(render_diagnostic_card(
+                title="Recommended Action Plan",
+                badge_label="Prescriptive",
+                badge_color="#547C78",
+                badge_bg="#EBF2F1",
+                items=res.get("retention_actions", []),
+                bullet_class="bullet-action",
+                bullet_char="→",
+                empty_text="Account status stable. Review periodic service satisfaction surveys."
+            ), unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -1059,20 +1037,13 @@ with tab_batch:
 
         # Chart 1: Donut Chart for Risk Bands
         with chart_col1:
-            st.markdown(textwrap.dedent("""
-            <div class="surface-card" style="padding: 1.25rem;">
-                <div style="font-family: 'Newsreader', serif; font-size: 1.15rem; font-weight: 500; color: #292B2A; margin-bottom: 0.5rem;">
-                    Risk Band Distribution
-                </div>
-            """), unsafe_allow_html=True)
-
             risk_summary_df = pd.DataFrame([
                 {"Category": "Low Risk (<35%)", "Count": analytics["low_risk_count"], "Order": 1},
                 {"Category": "Moderate Risk (35-65%)", "Count": analytics["moderate_risk_count"], "Order": 2},
                 {"Category": "High Risk (>65%)", "Count": analytics["high_risk_count"], "Order": 3},
             ])
 
-            donut_chart = alt.Chart(risk_summary_df).mark_arc(innerRadius=48, stroke="#FFFFFF", strokeWidth=2).encode(
+            donut_chart = alt.Chart(risk_summary_df).mark_arc(innerRadius=50, stroke="#FFFFFF", strokeWidth=2).encode(
                 theta=alt.Theta(field="Count", type="quantitative"),
                 color=alt.Color(
                     field="Category",
@@ -1081,26 +1052,21 @@ with tab_batch:
                         domain=["Low Risk (<35%)", "Moderate Risk (35-65%)", "High Risk (>65%)"],
                         range=["#4F7959", "#B87B3E", "#C85A46"]
                     ),
-                    legend=alt.Legend(title=None, orient="bottom", labelFont="Plus Jakarta Sans", labelFontSize=11)
+                    legend=alt.Legend(title=None, orient="bottom", labelFont="Plus Jakarta Sans", labelFontSize=11, labelLimit=140)
                 ),
                 tooltip=[
                     alt.Tooltip("Category:N", title="Risk Band"),
                     alt.Tooltip("Count:Q", title="Subscribers"),
                 ]
-            ).properties(height=230)
+            ).properties(
+                title=alt.TitleParams("Risk Band Distribution", font="Newsreader", fontSize=18, fontWeight=500, color="#292B2A", anchor="start", offset=12),
+                height=260
+            )
 
             st.altair_chart(donut_chart, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
 
         # Chart 2: Probability Distribution Histogram
         with chart_col2:
-            st.markdown(textwrap.dedent("""
-            <div class="surface-card" style="padding: 1.25rem;">
-                <div style="font-family: 'Newsreader', serif; font-size: 1.15rem; font-weight: 500; color: #292B2A; margin-bottom: 0.5rem;">
-                    Churn Probability Distribution
-                </div>
-            """), unsafe_allow_html=True)
-
             hist_chart = alt.Chart(batch_df).mark_bar(color="#547C78", cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
                 x=alt.X(
                     "churn_probability:Q",
@@ -1116,7 +1082,10 @@ with tab_batch:
                 tooltip=[
                     alt.Tooltip("count():Q", title="Count"),
                 ]
-            ).properties(height=230)
+            ).properties(
+                title=alt.TitleParams("Churn Probability Distribution", font="Newsreader", fontSize=18, fontWeight=500, color="#292B2A", anchor="start", offset=12),
+                height=260
+            )
 
             # Threshold rule line at 0.50
             threshold_df = pd.DataFrame([{"threshold": 0.50}])
@@ -1125,17 +1094,9 @@ with tab_batch:
             )
 
             st.altair_chart(hist_chart + rule, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
 
         # Chart 3: Churn Risk by Contract Type
         with chart_col3:
-            st.markdown(textwrap.dedent("""
-            <div class="surface-card" style="padding: 1.25rem;">
-                <div style="font-family: 'Newsreader', serif; font-size: 1.15rem; font-weight: 500; color: #292B2A; margin-bottom: 0.5rem;">
-                    Risk by Contract Term
-                </div>
-            """), unsafe_allow_html=True)
-
             contract_chart = alt.Chart(batch_df).mark_bar().encode(
                 x=alt.X("Contract:N", title="Contract Term", axis=alt.Axis(labelAngle=0, labelFont="Plus Jakarta Sans", titleFont="Plus Jakarta Sans")),
                 y=alt.Y("count():Q", title="Subscribers", stack="normalize", axis=alt.Axis(format="%", labelFont="Plus Jakarta Sans")),
@@ -1148,10 +1109,12 @@ with tab_batch:
                     legend=alt.Legend(title=None, orient="bottom", labelFont="Plus Jakarta Sans", labelFontSize=11)
                 ),
                 tooltip=["Contract:N", "risk_band:N", "count():Q"]
-            ).properties(height=230)
+            ).properties(
+                title=alt.TitleParams("Risk by Contract Term", font="Newsreader", fontSize=18, fontWeight=500, color="#292B2A", anchor="start", offset=12),
+                height=260
+            )
 
             st.altair_chart(contract_chart, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
 
@@ -1201,7 +1164,7 @@ with tab_batch:
         # Display Interactive Data Table
         display_columns = [
             "customerID", "Contract", "tenure", "MonthlyCharges",
-            "churn_probability", "risk_band", "outcome_label", "recommended_action"
+            "churn_percentage", "risk_band", "outcome_label", "recommended_action"
         ]
 
         st.dataframe(
@@ -1213,11 +1176,11 @@ with tab_batch:
                 "Contract": st.column_config.TextColumn("Contract Term", width="small"),
                 "tenure": st.column_config.NumberColumn("Tenure", format="%d mos", width="small"),
                 "MonthlyCharges": st.column_config.NumberColumn("Monthly Bill", format="$%.2f", width="small"),
-                "churn_probability": st.column_config.ProgressColumn(
+                "churn_percentage": st.column_config.ProgressColumn(
                     "Churn Probability",
                     format="%.1f%%",
                     min_value=0.0,
-                    max_value=1.0,
+                    max_value=100.0,
                     width="medium"
                 ),
                 "risk_band": st.column_config.TextColumn("Risk Tier", width="small"),
