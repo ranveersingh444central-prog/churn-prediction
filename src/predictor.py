@@ -28,6 +28,15 @@ class ChurnPredictor:
     ]
     NUMERIC_COLS = ["tenure", "MonthlyCharges", "TotalCharges"]
 
+    REQUIRED_INPUT_COLUMNS = [
+        "gender", "SeniorCitizen", "Partner", "Dependents", "tenure",
+        "PhoneService", "MultipleLines", "InternetService", "OnlineSecurity",
+        "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV",
+        "StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod",
+        "MonthlyCharges"
+    ]
+    OPTIONAL_INPUT_COLUMNS = ["customerID", "TotalCharges", "Churn"]
+
     # Pre-crafted benchmark profiles for quick demonstration & testing
     PRESET_PROFILES = {
         "Low-Risk Customer (Long-term, 2-Year Contract, Auto-Pay)": {
@@ -293,6 +302,7 @@ class ChurnPredictor:
 
         outcome_label = "Likely to Churn" if pred == 1 else "Likely to Stay"
         risk_drivers, retention_anchors = self.diagnose_factors(normalized_data, prob)
+        retention_actions = self.suggest_retention_actions(normalized_data, prob)
 
         return {
             "probability": prob,
@@ -307,5 +317,242 @@ class ChurnPredictor:
             "explanation": explanation,
             "risk_drivers": risk_drivers,
             "retention_anchors": retention_anchors,
+            "retention_actions": retention_actions,
             "normalized_input": normalized_data,
         }
+
+    def suggest_retention_actions(self, data: Dict[str, Any], probability: float) -> List[str]:
+        """
+        Derive prioritized, rule-based operational retention recommendations
+        tailored to the customer's specific contract, services, tenure, and risk score.
+        """
+        actions = []
+        contract = str(data.get("Contract", "Month-to-month"))
+        payment = str(data.get("PaymentMethod", ""))
+        tenure = float(data.get("tenure", 0))
+        monthly = float(data.get("MonthlyCharges", 0.0))
+        internet = str(data.get("InternetService", "DSL"))
+        tech_support = str(data.get("TechSupport", "No"))
+        online_sec = str(data.get("OnlineSecurity", "No"))
+
+        # 1. Contract Upgrade Incentive (Highest feature sensitivity)
+        if contract == "Month-to-month":
+            actions.append("Propose 12-month commitment upgrade with a 15% promotional billing discount")
+        elif contract == "One year" and probability > 0.50:
+            actions.append("Present early 2-year renewal agreement with locked-in rates and loyalty perks")
+
+        # 2. Payment Friction Resolution
+        if payment == "Electronic check":
+            actions.append("Incentivize migration to automatic billing (Credit Card / Bank ACH) with a $5/mo statement credit")
+
+        # 3. Monthly Spend & Bundle Optimization
+        if monthly >= 80.0:
+            actions.append(f"Perform bundle optimization audit to restructure services below ${monthly * 0.85:.0f}/mo")
+
+        # 4. Service Support & Security Coverage
+        if internet != "No":
+            if tech_support == "No":
+                actions.append("Include complimentary Premium Tech Support & Wi-Fi coverage diagnostic for 6 months")
+            if online_sec == "No":
+                actions.append("Activate complimentary cybersecurity & identity theft protection trial")
+
+        # 5. Lifecycle-Specific Interventions
+        if tenure <= 6:
+            actions.append("Enroll in VIP White-Glove Onboarding with a dedicated 30-day customer success check-in")
+        elif tenure >= 48 and probability >= 0.35:
+            actions.append("Assign Senior Retention Account Executive; offer customer loyalty anniversary renewal gift")
+
+        # 6. Low-risk / Stable Account Action
+        if probability < 0.35 and not actions:
+            actions.append("Account is stable. Enroll in customer advocacy referral program with mutual bill credits")
+
+        if not actions:
+            actions.append("Conduct periodic satisfaction survey and review service utilization")
+
+        return actions[:3]
+
+    def validate_dataset(self, df: pd.DataFrame) -> Tuple[bool, List[str], List[str]]:
+        """
+        Validate an uploaded or provided batch DataFrame against required schema.
+        Returns:
+            is_valid (bool): True if all required columns exist and data has rows.
+            missing_cols (List[str]): List of missing required column names.
+            messages (List[str]): Explanations or warnings for the user.
+        """
+        messages = []
+        if df is None or len(df) == 0:
+            return False, [], ["Uploaded dataset contains no records or is completely empty."]
+
+        # Check column names (case-insensitive mapping if needed)
+        existing_cols = list(df.columns)
+        existing_lower_map = {str(c).strip().lower(): c for c in existing_cols}
+
+        missing_cols = []
+        for req in self.REQUIRED_INPUT_COLUMNS:
+            if req not in existing_cols:
+                if req.lower() in existing_lower_map:
+                    df.rename(columns={existing_lower_map[req.lower()]: req}, inplace=True)
+                else:
+                    missing_cols.append(req)
+
+        if missing_cols:
+            messages.append(
+                f"Missing {len(missing_cols)} required column(s): {', '.join(missing_cols)}. "
+                "Please verify your CSV matches the Telco customer feature schema."
+            )
+            return False, missing_cols, messages
+
+        # Check for missing values in required columns
+        null_counts = df[self.REQUIRED_INPUT_COLUMNS].isnull().sum()
+        cols_with_nulls = null_counts[null_counts > 0]
+        if not cols_with_nulls.empty:
+            messages.append(
+                f"Notice: Missing values detected in {len(cols_with_nulls)} column(s). "
+                "Automatic default imputation will be applied during preprocessing."
+            )
+
+        return True, [], messages
+
+    def predict_batch(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+        """
+        Process a batch DataFrame of customer records, running vectorized feature
+        transformation and model inference matching the exact production pipeline.
+        Returns:
+            results_df (pd.DataFrame): Enriched DataFrame with probabilities, risk bands, and actions.
+            analytics (Dict[str, Any]): Summary KPIs, counts, distributions, and rankings.
+        """
+        d = df.copy()
+
+        # Handle customerID
+        if "customerID" in d.columns:
+            customer_ids = d["customerID"].astype(str).tolist()
+        else:
+            customer_ids = [f"CUST-{i+1:04d}" for i in range(len(d))]
+
+        # SeniorCitizen normalization
+        if "SeniorCitizen" in d.columns:
+            if d["SeniorCitizen"].dtype == object:
+                senior = d["SeniorCitizen"].astype(str).str.strip().str.lower().isin(["yes", "1", "true"]).astype(int)
+            else:
+                senior = d["SeniorCitizen"].fillna(0).astype(int)
+        else:
+            senior = pd.Series(0, index=d.index)
+
+        # Tenure & MonthlyCharges
+        tenure = pd.to_numeric(d.get("tenure", 0), errors="coerce").fillna(0).clip(lower=0).astype(float)
+        monthly = pd.to_numeric(d.get("MonthlyCharges", 0.0), errors="coerce").fillna(0.0).clip(lower=0.0).astype(float)
+
+        # TotalCharges
+        if "TotalCharges" in d.columns:
+            total = pd.to_numeric(d["TotalCharges"], errors="coerce")
+            total = total.fillna(tenure * monthly).clip(lower=0.0).astype(float)
+        else:
+            total = (tenure * monthly).astype(float)
+
+        internet = d.get("InternetService", "DSL").fillna("DSL").astype(str)
+        phone = d.get("PhoneService", "Yes").fillna("Yes").astype(str)
+
+        def binary_series(col_name: str, match_val: str = "Yes", req_internet: bool = False, req_phone: bool = False) -> pd.Series:
+            s = (d.get(col_name, "No").fillna("No").astype(str) == match_val).astype(int)
+            if req_internet:
+                s = s.where(internet != "No", 0)
+            if req_phone:
+                s = s.where(phone != "No", 0)
+            return s
+
+        feat_df = pd.DataFrame({
+            "SeniorCitizen": senior,
+            "tenure": tenure,
+            "MonthlyCharges": monthly,
+            "TotalCharges": total,
+            "gender_Male": (d.get("gender", "Female").fillna("Female").astype(str) == "Male").astype(int),
+            "Partner_Yes": (d.get("Partner", "No").fillna("No").astype(str) == "Yes").astype(int),
+            "Dependents_Yes": (d.get("Dependents", "No").fillna("No").astype(str) == "Yes").astype(int),
+            "PhoneService_Yes": (phone == "Yes").astype(int),
+            "MultipleLines_Yes": binary_series("MultipleLines", "Yes", req_phone=True),
+            "InternetService_Fiber optic": (internet == "Fiber optic").astype(int),
+            "InternetService_No": (internet == "No").astype(int),
+            "OnlineSecurity_Yes": binary_series("OnlineSecurity", "Yes", req_internet=True),
+            "OnlineBackup_Yes": binary_series("OnlineBackup", "Yes", req_internet=True),
+            "DeviceProtection_Yes": binary_series("DeviceProtection", "Yes", req_internet=True),
+            "TechSupport_Yes": binary_series("TechSupport", "Yes", req_internet=True),
+            "StreamingTV_Yes": binary_series("StreamingTV", "Yes", req_internet=True),
+            "StreamingMovies_Yes": binary_series("StreamingMovies", "Yes", req_internet=True),
+            "Contract_One year": (d.get("Contract", "").fillna("").astype(str) == "One year").astype(int),
+            "Contract_Two year": (d.get("Contract", "").fillna("").astype(str) == "Two year").astype(int),
+            "PaperlessBilling_Yes": (d.get("PaperlessBilling", "No").fillna("No").astype(str) == "Yes").astype(int),
+            "PaymentMethod_Credit card (automatic)": (d.get("PaymentMethod", "").fillna("").astype(str) == "Credit card (automatic)").astype(int),
+            "PaymentMethod_Electronic check": (d.get("PaymentMethod", "").fillna("").astype(str) == "Electronic check").astype(int),
+            "PaymentMethod_Mailed check": (d.get("PaymentMethod", "").fillna("").astype(str) == "Mailed check").astype(int),
+        })
+
+        # Feature order alignment & Scaling
+        feat_df = feat_df[self.feature_columns]
+        feat_df[self.NUMERIC_COLS] = self.scaler.transform(feat_df[self.NUMERIC_COLS])
+
+        # Inference
+        probs = self.model.predict_proba(feat_df)[:, 1]
+        preds = (probs >= 0.50).astype(int)
+
+        # Risk band assignments
+        risk_bands = []
+        risk_categories = []
+        for p in probs:
+            if p < 0.35:
+                risk_bands.append("Low Risk")
+                risk_categories.append("Safe")
+            elif p <= 0.65:
+                risk_bands.append("Moderate Risk")
+                risk_categories.append("Monitor")
+            else:
+                risk_bands.append("High Risk")
+                risk_categories.append("At Risk")
+
+        outcome_labels = ["Likely to Churn" if pr == 1 else "Likely to Stay" for pr in preds]
+
+        # Generate top action for each record
+        top_actions = []
+        records = d.to_dict(orient="records")
+        for i, rec in enumerate(records):
+            acts = self.suggest_retention_actions(rec, probs[i])
+            top_actions.append(acts[0] if acts else "Maintain standard customer service")
+
+        # Build output DataFrame
+        results_df = pd.DataFrame({
+            "customerID": customer_ids,
+            "Contract": d.get("Contract", "Month-to-month"),
+            "tenure": tenure.astype(int),
+            "MonthlyCharges": monthly.round(2),
+            "TotalCharges": total.round(2),
+            "InternetService": internet,
+            "PaymentMethod": d.get("PaymentMethod", "Electronic check"),
+            "churn_probability": np.round(probs, 4),
+            "churn_percentage": np.round(probs * 100, 1),
+            "prediction": preds,
+            "outcome_label": outcome_labels,
+            "risk_band": risk_bands,
+            "risk_category": risk_categories,
+            "recommended_action": top_actions,
+        })
+
+        # Calculate analytics
+        n_total = len(results_df)
+        n_high = int((results_df["risk_band"] == "High Risk").sum())
+        n_mod = int((results_df["risk_band"] == "Moderate Risk").sum())
+        n_low = int((results_df["risk_band"] == "Low Risk").sum())
+        n_pred_churn = int((results_df["prediction"] == 1).sum())
+
+        analytics = {
+            "total_customers": n_total,
+            "high_risk_count": n_high,
+            "high_risk_pct": round((n_high / n_total) * 100, 1) if n_total > 0 else 0.0,
+            "moderate_risk_count": n_mod,
+            "moderate_risk_pct": round((n_mod / n_total) * 100, 1) if n_total > 0 else 0.0,
+            "low_risk_count": n_low,
+            "low_risk_pct": round((n_low / n_total) * 100, 1) if n_total > 0 else 0.0,
+            "avg_probability": round(float(np.mean(probs)) * 100, 1) if n_total > 0 else 0.0,
+            "predicted_churn_count": n_pred_churn,
+            "predicted_churn_pct": round((n_pred_churn / n_total) * 100, 1) if n_total > 0 else 0.0,
+        }
+
+        return results_df, analytics
